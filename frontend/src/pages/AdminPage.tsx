@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAllRequests, updateRequest, getAdminStats, getUsers, updateUserRole } from '../api/requests'
+import { getAllRequests, updateRequest, getAdminStats, getUsers, updateUserRole, getHealthCheck } from '../api/requests'
 import { getAllBacklog, updateBacklogItem, deleteBacklogItem, getBacklogStats } from '../api/backlog'
 import { getTunnelStatus, startTunnel, stopTunnel } from '../api/tunnel'
 import { useAuth } from '../context/AuthContext'
@@ -73,7 +73,7 @@ const PRIORITY_STYLES: Record<string, string> = {
   critical: 'bg-red-600/30 text-red-300',
 }
 
-type Tab = 'requests' | 'backlog' | 'users' | 'tunnel'
+type Tab = 'requests' | 'backlog' | 'users' | 'tunnel' | 'health'
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('requests')
@@ -181,6 +181,13 @@ export default function AdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tunnelStatus'] }),
   })
 
+  const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useQuery({
+    queryKey: ['healthCheck'],
+    queryFn: getHealthCheck,
+    enabled: tab === 'health',
+    refetchInterval: tab === 'health' ? 30000 : false,
+  })
+
   const allRequests: any[] = data?.items || []
 
   const handleMove = (id: number, status: string) => {
@@ -269,6 +276,16 @@ export default function AdminPage() {
           }`}
         >
           Tunnel
+        </button>
+        <button
+          onClick={() => setTab('health')}
+          className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
+            tab === 'health'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-transparent text-slate-400 hover:text-white'
+          }`}
+        >
+          Health
         </button>
       </div>
 
@@ -651,6 +668,88 @@ export default function AdminPage() {
             <p className="text-red-400 text-sm mt-4">
               {(roleMutation.error as any)?.response?.data?.detail || 'Failed to update role'}
             </p>
+          )}
+        </div>
+      )}
+
+      {/* ========== HEALTH TAB ========== */}
+      {tab === 'health' && (
+        <div className="max-w-lg space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-slate-400 text-sm">Service connectivity status. Auto-refreshes every 30s.</p>
+            <button
+              onClick={() => refetchHealth()}
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {healthLoading && <p className="text-slate-400">Checking services...</p>}
+
+          {!healthLoading && healthData && (
+            <div className="space-y-3">
+              {/* Jellyfin */}
+              <div className="bg-slate-800 rounded-lg p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                    healthData.jellyfin?.status === 'ok' ? 'bg-green-500' : 'bg-red-500'
+                  }`} />
+                  <h3 className="text-white font-medium">Jellyfin</h3>
+                </div>
+                {healthData.jellyfin?.status === 'ok' ? (
+                  <div className="ml-6 space-y-1">
+                    <p className="text-sm text-slate-300">{healthData.jellyfin.server_name}</p>
+                    <p className="text-xs text-slate-400">Version {healthData.jellyfin.version}</p>
+                    <p className="text-xs text-slate-500">{healthData.jellyfin.url}</p>
+                  </div>
+                ) : (
+                  <div className="ml-6">
+                    <p className="text-sm text-red-400">Unreachable</p>
+                    <p className="text-xs text-slate-500">{healthData.jellyfin?.url}</p>
+                    {healthData.jellyfin?.detail && (
+                      <p className="text-xs text-slate-500 mt-1">{healthData.jellyfin.detail}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* TMDB */}
+              <div className="bg-slate-800 rounded-lg p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                    healthData.tmdb?.status === 'ok' ? 'bg-green-500' : 'bg-red-500'
+                  }`} />
+                  <h3 className="text-white font-medium">TMDB API</h3>
+                </div>
+                <div className="ml-6">
+                  <p className="text-sm text-slate-300">
+                    {healthData.tmdb?.status === 'ok' ? 'Connected' : 'Unreachable'}
+                  </p>
+                  {healthData.tmdb?.detail && (
+                    <p className="text-xs text-slate-500 mt-1">{healthData.tmdb.detail}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Database */}
+              <div className="bg-slate-800 rounded-lg p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                    healthData.database?.status === 'ok' ? 'bg-green-500' : 'bg-red-500'
+                  }`} />
+                  <h3 className="text-white font-medium">Database</h3>
+                </div>
+                <div className="ml-6">
+                  <p className="text-sm text-slate-300">
+                    {healthData.database?.status === 'ok' ? 'Connected' : 'Error'}
+                  </p>
+                  {healthData.database?.detail && (
+                    <p className="text-xs text-slate-500 mt-1">{healthData.database.detail}</p>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}

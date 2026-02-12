@@ -3,10 +3,13 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+import httpx
+
 from app.dependencies import require_admin
 from app.database import get_db
 from app.schemas import RequestUpdate, RequestResponse, PaginatedResponse
 from app.services import request_service
+from app.services.jellyfin_client import jellyfin_client
 
 router = APIRouter()
 
@@ -95,3 +98,64 @@ async def update_user_role(
 
     updated = db.execute("SELECT user_id, username, role, granted_by, created_at, updated_at FROM user_roles WHERE user_id = ?", (user_id,)).fetchone()
     return dict(updated)
+
+
+# --- Health Check ---
+
+@router.get("/health")
+async def health_check(admin: dict = Depends(require_admin)):
+    checks = {}
+
+    # Jellyfin
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{jellyfin_client.base_url}/System/Info/Public",
+            )
+            if resp.status_code == 200:
+                info = resp.json()
+                checks["jellyfin"] = {
+                    "status": "ok",
+                    "url": jellyfin_client.base_url,
+                    "server_name": info.get("ServerName"),
+                    "version": info.get("Version"),
+                }
+            else:
+                checks["jellyfin"] = {
+                    "status": "error",
+                    "url": jellyfin_client.base_url,
+                    "detail": f"HTTP {resp.status_code}",
+                }
+    except Exception as e:
+        checks["jellyfin"] = {
+            "status": "error",
+            "url": jellyfin_client.base_url,
+            "detail": str(e),
+        }
+
+    # TMDB
+    try:
+        from app.config import settings
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{settings.tmdb_base_url}/configuration",
+                params={"api_key": settings.tmdb_api_key},
+            )
+            checks["tmdb"] = {
+                "status": "ok" if resp.status_code == 200 else "error",
+                "detail": None if resp.status_code == 200 else f"HTTP {resp.status_code}",
+            }
+    except Exception as e:
+        checks["tmdb"] = {"status": "error", "detail": str(e)}
+
+    # Database
+    try:
+        from app.database import get_db_connection
+        conn = get_db_connection()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        checks["database"] = {"status": "ok"}
+    except Exception as e:
+        checks["database"] = {"status": "error", "detail": str(e)}
+
+    return checks

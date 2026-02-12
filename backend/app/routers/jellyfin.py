@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 import httpx
 
@@ -6,6 +8,7 @@ from app.schemas import LibraryItem, LibraryStats
 from app.services.jellyfin_client import jellyfin_client
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/movies")
@@ -45,10 +48,14 @@ async def get_movies(
             "page": page,
             "limit": limit,
         }
-    except httpx.HTTPStatusError:
-        raise HTTPException(status_code=502, detail="Jellyfin server error")
-    except httpx.ConnectError:
-        raise HTTPException(status_code=502, detail="Cannot connect to Jellyfin server")
+    except httpx.HTTPStatusError as e:
+        logger.error("Jellyfin HTTP error (movies): %s", e.response.status_code)
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="Jellyfin session expired. Please log out and log back in.")
+        raise HTTPException(status_code=502, detail=f"Jellyfin error: {e.response.status_code}")
+    except Exception as e:
+        logger.error("Jellyfin error (movies): %s", e)
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.get("/tvshows")
@@ -88,10 +95,13 @@ async def get_tv_shows(
             "page": page,
             "limit": limit,
         }
-    except httpx.HTTPStatusError:
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="Jellyfin session expired. Please log out and log back in.")
         raise HTTPException(status_code=502, detail="Jellyfin server error")
-    except httpx.ConnectError:
-        raise HTTPException(status_code=502, detail="Cannot connect to Jellyfin server")
+    except Exception as e:
+        logger.error("Jellyfin error (tvshows): %s", e)
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.get("/stats", response_model=LibraryStats)
@@ -114,10 +124,13 @@ async def get_library_stats(user: dict = Depends(get_current_user)):
             total_shows=shows.get("TotalRecordCount", 0),
             total_episodes=episodes.get("TotalRecordCount", 0),
         )
-    except httpx.HTTPStatusError:
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="Jellyfin session expired. Please log out and log back in.")
         raise HTTPException(status_code=502, detail="Jellyfin server error")
-    except httpx.ConnectError:
-        raise HTTPException(status_code=502, detail="Cannot connect to Jellyfin server")
+    except Exception as e:
+        logger.error("Jellyfin error (stats): %s", e)
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.get("/recent")
@@ -139,7 +152,10 @@ async def get_recent(
             )
             for item in items
         ]
-    except httpx.HTTPStatusError:
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="Jellyfin session expired. Please log out and log back in.")
         raise HTTPException(status_code=502, detail="Jellyfin server error")
-    except httpx.ConnectError:
-        raise HTTPException(status_code=502, detail="Cannot connect to Jellyfin server")
+    except Exception as e:
+        logger.error("Jellyfin error (recent): %s", e)
+        raise HTTPException(status_code=502, detail=str(e))

@@ -50,3 +50,8 @@ export async function updateUserRole(userId: string, role: string) {
   const { data } = await client.patch(`/admin/users/${userId}`, { role })
   return data
 }
+
+export async function getHealthCheck() {
+  const { data } = await client.get('/admin/health')
+  return data
+}
