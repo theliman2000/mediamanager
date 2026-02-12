@@ -78,10 +78,18 @@ def init_db():
             role        TEXT NOT NULL DEFAULT 'user'
                             CHECK(role IN ('user', 'admin')),
             granted_by  TEXT,
+            jellyfin_token TEXT,
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
+
+    # Migration: add jellyfin_token column to user_roles if missing
+    try:
+        conn.execute("SELECT jellyfin_token FROM user_roles LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE user_roles ADD COLUMN jellyfin_token TEXT")
+        conn.commit()
 
     # Migration: recreate backlog table if it lacks 'ready_for_test' status
     try:

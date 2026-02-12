@@ -18,6 +18,8 @@ LIBRARY_CHECK_INTERVAL = 300  # 5 minutes
 
 async def check_library_for_fulfilled_requests():
     """Background task that checks if any open requests are now in the Jellyfin library."""
+    import httpx
+
     while True:
         await asyncio.sleep(LIBRARY_CHECK_INTERVAL)
         try:
@@ -27,19 +29,25 @@ async def check_library_for_fulfilled_requests():
                 conn.close()
                 continue
 
-            # We need a valid Jellyfin admin token to search the library.
-            # Use the first request's user_id — but we don't have their token stored.
-            # Instead, do a server-level search using the Jellyfin API key approach.
-            # Since we proxy through user tokens, we'll check per-user on their next visit.
-            # For the background task, we use a simple title search via the public API.
+            # Get a valid Jellyfin token from the most recently active admin
+            admin_row = conn.execute(
+                "SELECT user_id, jellyfin_token FROM user_roles WHERE role = 'admin' AND jellyfin_token IS NOT NULL AND jellyfin_token != '' LIMIT 1"
+            ).fetchone()
+
+            if not admin_row or not admin_row["jellyfin_token"]:
+                logger.debug("No admin Jellyfin token available for auto-fulfill check")
+                conn.close()
+                continue
+
+            admin_token = admin_row["jellyfin_token"]
+            admin_user_id = admin_row["user_id"]
+
             for req in open_requests:
                 try:
                     item_type = "Movie" if req["media_type"] == "movie" else "Series"
-                    # Use Jellyfin's public items search (no auth needed for local server)
-                    import httpx
                     async with httpx.AsyncClient() as client:
                         resp = await client.get(
-                            f"{jellyfin_client.base_url}/Items",
+                            f"{jellyfin_client.base_url}/Users/{admin_user_id}/Items",
                             params={
                                 "SearchTerm": req["title"],
                                 "IncludeItemTypes": item_type,
@@ -48,9 +56,12 @@ async def check_library_for_fulfilled_requests():
                                 "Fields": "ProviderIds",
                             },
                             headers={
-                                "Authorization": jellyfin_client._auth_header(),
+                                "Authorization": jellyfin_client._auth_header(admin_token),
                             },
                         )
+                        if resp.status_code == 401:
+                            logger.warning("Admin Jellyfin token expired for auto-fulfill")
+                            break
                         if resp.status_code != 200:
                             continue
                         data = resp.json()
@@ -65,7 +76,7 @@ async def check_library_for_fulfilled_requests():
                             auto_fulfill_request(conn, req["id"])
                             break
                 except Exception:
-                    logger.debug("Error checking request #%d", req["id"])
+                    logger.debug("Error checking request #%d", req["id"], exc_info=True)
                     continue
 
             conn.close()

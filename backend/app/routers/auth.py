@@ -39,13 +39,16 @@ async def login(body: LoginRequest, db=Depends(get_db)):
     if not existing:
         role = "admin" if jellyfin_admin else "user"
         db.execute(
-            "INSERT INTO user_roles (user_id, username, role) VALUES (?, ?, ?)",
-            (user_id, username, role),
+            "INSERT INTO user_roles (user_id, username, role, jellyfin_token) VALUES (?, ?, ?, ?)",
+            (user_id, username, role, access_token),
         )
         db.commit()
     else:
-        # Keep username in sync
-        db.execute("UPDATE user_roles SET username = ? WHERE user_id = ?", (username, user_id))
+        # Keep username and token in sync
+        db.execute(
+            "UPDATE user_roles SET username = ?, jellyfin_token = ? WHERE user_id = ?",
+            (username, access_token, user_id),
+        )
         db.commit()
 
     payload = {
