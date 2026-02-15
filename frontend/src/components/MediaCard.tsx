@@ -34,7 +34,7 @@ export default function MediaCard({
       <div className="aspect-[2/3] bg-slate-700 relative">
         {posterPath ? (
           <img
-            src={`${TMDB_IMG}${posterPath}`}
+            src={posterPath.startsWith('http') ? posterPath : `${TMDB_IMG}${posterPath}`}
             alt={title}
             className="w-full h-full object-cover"
             loading="lazy"

@@ -129,4 +129,45 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_backlog_type ON backlog(type);
         """)
 
+    # Migration: add 'book' to requests.media_type CHECK constraint
+    try:
+        conn.execute("INSERT INTO requests (user_id, username, tmdb_id, media_type, title) VALUES ('__test__', '__test__', 0, 'book', '__test__')")
+        conn.execute("DELETE FROM requests WHERE user_id = '__test__'")
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        # Must disable FK checks because request_history references requests
+        conn.executescript("""
+            PRAGMA foreign_keys=OFF;
+
+            ALTER TABLE requests RENAME TO requests_old;
+
+            CREATE TABLE requests (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                username    TEXT NOT NULL,
+                tmdb_id     INTEGER NOT NULL,
+                media_type  TEXT NOT NULL CHECK(media_type IN ('movie', 'tv', 'book')),
+                title       TEXT NOT NULL,
+                poster_path TEXT,
+                status      TEXT NOT NULL DEFAULT 'pending'
+                                CHECK(status IN ('pending', 'approved', 'denied', 'fulfilled')),
+                admin_note  TEXT,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            INSERT INTO requests (id, user_id, username, tmdb_id, media_type, title, poster_path, status, admin_note, created_at, updated_at)
+                SELECT id, user_id, username, tmdb_id, media_type, title, poster_path, status, admin_note, created_at, updated_at
+                FROM requests_old;
+
+            DROP TABLE requests_old;
+
+            CREATE INDEX IF NOT EXISTS idx_requests_user_id ON requests(user_id);
+            CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
+            CREATE INDEX IF NOT EXISTS idx_requests_tmdb_id ON requests(tmdb_id);
+
+            PRAGMA foreign_keys=ON;
+        """)
+
     conn.close()

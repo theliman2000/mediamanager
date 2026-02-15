@@ -4,7 +4,7 @@ interface Props {
   placeholder?: string
 }
 
-export default function SearchBar({ value, onChange, placeholder = 'Search movies and TV shows...' }: Props) {
+export default function SearchBar({ value, onChange, placeholder = 'Search movies, TV shows, and books...' }: Props) {
   return (
     <input
       type="text"

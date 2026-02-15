@@ -10,6 +10,7 @@ import LibraryPage from './pages/LibraryPage'
 import MyRequestsPage from './pages/MyRequestsPage'
 import AdminPage from './pages/AdminPage'
 import ReportPage from './pages/ReportPage'
+import BookDetailPage from './pages/BookDetailPage'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/movie/:tmdbId" element={<MediaDetailPage mediaType="movie" />} />
           <Route path="/tv/:tmdbId" element={<MediaDetailPage mediaType="tv" />} />
+          <Route path="/book/:workId" element={<BookDetailPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/my-requests" element={<MyRequestsPage />} />
           <Route path="/report" element={<ReportPage />} />

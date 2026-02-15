@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db, get_db_connection
-from app.routers import auth, tmdb, requests, jellyfin, admin, backlog, tunnel
+from app.routers import auth, tmdb, requests, jellyfin, admin, backlog, tunnel, books
 from app.services.jellyfin_client import jellyfin_client
 from app.services.request_service import get_open_requests, auto_fulfill_request
 
@@ -43,6 +43,8 @@ async def check_library_for_fulfilled_requests():
             admin_user_id = admin_row["user_id"]
 
             for req in open_requests:
+                if req["media_type"] == "book":
+                    continue
                 try:
                     item_type = "Movie" if req["media_type"] == "movie" else "Series"
                     async with httpx.AsyncClient() as client:
@@ -109,6 +111,7 @@ app.include_router(jellyfin.router, prefix="/api/library", tags=["library"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(backlog.router, prefix="/api/backlog", tags=["backlog"])
 app.include_router(tunnel.router, prefix="/api/admin/tunnel", tags=["tunnel"])
+app.include_router(books.router, prefix="/api/books", tags=["books"])
 
 
 @app.get("/api/health")

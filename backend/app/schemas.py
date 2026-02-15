@@ -116,6 +116,38 @@ class LibraryStats(BaseModel):
     total_episodes: int
 
 
+# --- Books (Open Library) ---
+class BookSearchResult(BaseModel):
+    ol_work_id: int
+    ol_work_key: str
+    media_type: str = "book"
+    title: str
+    authors: list[str] = []
+    first_publish_year: Optional[int] = None
+    cover_url: Optional[str] = None
+    subject: list[str] = []
+    edition_count: Optional[int] = None
+    ratings_average: Optional[float] = None
+    existing_request: Optional[str] = None
+    already_in_library: bool = False
+
+
+class BookDetail(BaseModel):
+    ol_work_id: int
+    ol_work_key: str
+    title: str
+    authors: list[str] = []
+    description: Optional[str] = None
+    first_publish_year: Optional[int] = None
+    cover_url: Optional[str] = None
+    subjects: list[str] = []
+    page_count: Optional[int] = None
+    edition_count: Optional[int] = None
+    ratings_average: Optional[float] = None
+    existing_request: Optional[str] = None
+    already_in_library: bool = False
+
+
 # --- Backlog ---
 class BacklogCreate(BaseModel):
     type: str = "bug"
